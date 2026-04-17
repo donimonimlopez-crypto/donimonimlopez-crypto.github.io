@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Permanent Video Vault</title>
+    <style>
+        body { background: #121212; color: white; font-family: sans-serif; padding: 20px; }
+        .video-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: #1e1e1e; padding: 10px; border-radius: 8px; }
+        video { width: 100%; border-radius: 4px; margin-bottom: 10px; }
+        input { margin-bottom: 20px; }
+        button { background: #ff4444; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>Video Vault (Stored Locally)</h1>
+    <p>Upload a video. It will be saved into your browser's IndexedDB storage.</p>
+    
+    <input type="file" id="videoInput" accept="video/*">
+    
+    <div class="video-container" id="vault"></div>
+
+    <script>
+        let db;
+        const request = indexedDB.open("VideoVault", 1);
+
+        // 1. Setup Database
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            db.createObjectStore("videos", { keyPath: "id", autoIncrement: true });
+        };
+
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            displayVideos();
+        };
+
+        // 2. Handle File Upload
+        document.getElementById('videoInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const transaction = db.transaction(["videos"], "readwrite");
+                const store = transaction.objectStore("videos");
+                
+                store.add({
+                    name: file.name,
+                    data: event.target.result // Saves the actual video bits
+                });
+
+                transaction.oncomplete = () => {
+                    displayVideos();
+                    console.log("Video saved forever!");
+                };
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // 3. Show Videos from Storage
+        function displayVideos() {
+            const vault = document.getElementById('vault');
+            vault.innerHTML = "";
+            
+            const transaction = db.transaction(["videos"], "readonly");
+            const store = transaction.objectStore("videos");
+            
+            store.openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const videoBlob = new Blob([cursor.value.data], { type: 'video/mp4' });
+                    const videoURL = URL.createObjectURL(videoBlob);
+
+                    const div = document.createElement('div');
+                    div.className = "card";
+                    div.innerHTML = `
+                        <p>${cursor.value.name}</p>
+                        <video controls src="${videoURL}"></video>
+                        <button onclick="deleteVideo(${cursor.value.id})">Delete Permanentally</button>
+                    `;
+                    vault.appendChild(div);
+                    cursor.continue();
+                }
+            };
+        }
+
+        function deleteVideo(id) {
+            const transaction = db.transaction(["videos"], "readwrite");
+            transaction.objectStore("videos").delete(id);
+            transaction.oncomplete = () => displayVideos();
+        }
+    </script>
+</body>
+</html>
