@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniFlix - Upload, Edit, Delete & Play</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Arial', sans-serif; background: #141414; color: white; overflow-x: hidden; }
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s;
+        }
+        .loader {
+            border: 8px solid #333; border-top: 8px solid #e50914;
+            border-radius: 50%; width: 60px; height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-text { margin-top: 20px; font-size: 18px; color: #fff; }
+        .hidden { opacity: 0; pointer-events: none; }
+        header {
+            background: #000; padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            position: fixed; top: 0; width: 100%; z-index: 100;
+        }
+        #logo { font-size: 24px; font-weight: bold; color: #e50914; }
+        #upload-btn { background: #e50914; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        #upload-input { display: none; }
+        main { padding-top: 70px; padding-bottom: 20px; }
+        #movies-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px; padding: 20px;
+        }
+        .movie-card {
+            background: #221f1f; border-radius: 8px; overflow: hidden;
+            cursor: pointer; transition: transform 0.3s; position: relative;
+        }
+        .movie-card:hover { transform: scale(1.02); }
+        .movie-thumbnail {
+            width: 100%; height: 200px; object-fit: cover; background: #333;
+        }
+        .movie-info {
+            padding: 15px;
+        }
+        .movie-title {
+            font-size: 18px; margin-bottom: 5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .action-btn {
+            position: absolute; top: 10px; background: rgba(0,0,0,0.7); color: white;
+            border: none; border-radius: 50%; width: 30px; height: 30px;
+            font-size: 16px; cursor: pointer; display: none; z-index: 10;
+        }
+        .edit-btn   { right: 45px; background: #007bff; }
+        .delete-btn { right: 10px; background: #dc3545; }
+        .movie-card:hover .action-btn { display: block; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        #upload-modal, #player-modal, #edit-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center;
+            z-index: 200;
+        }
+        .modal-content {
+            background: #000; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;
+            text-align: center; position: relative;
+        }
+        .close { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #fff; }
+        #file-input { width: 100%; padding: 10px; margin: 10px 0; border: none; border-radius: 5px; }
+        #player { width: 100%; height: 400px; background: #000; }
+        #edit-title { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #555; border-radius: 5px; background: #333; color: white; }
+        #credit {
+            position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+            color: #FFD700; font-size: 14px; font-weight: bold; font-family: 'Courier New', monospace;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loader"></div>
+        <div id="loading-text">Loading MiniFlix...</div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div id="logo">MiniFlix</div>
+        <button id="upload-btn">Upload Movie</button>
+        <input type="file" id="upload-input" accept="video/*" multiple>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <div id="movies-grid"></div>
+    </main>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('upload-modal')">X</span>
+            <h2>Upload Your Movie</h2>
+            <p>Select video files (MP4, AVI, etc.)</p>
+            <input type="file" id="file-input" accept="video/*" multiple>
+            <button onclick="uploadMovies()">Upload</button>
+        </div>
+    </div>
+
+    <!-- Player Modal -->
+    <div id="player-modal">
+        <div class="modal-content" style="width: 90%; max-width: 800px; height: 90%; position: relative;">
+            <span class="close" onclick="closeModal('player-modal')">X</span>
+            <video id="player" controls></video>
+        </div>
+    </div>
+
+    <!-- Edit Title Modal -->
+    <div id="edit-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('edit-modal')">X</span>
+            <h2>Edit Movie Title</h2>
+            <input type="text" id="edit-title" placeholder="Enter new title">
+            <button onclick="saveTitle()">Save</button>
+        </div>
+    </div>
+
+    <div id="credit">by: Seth Jacob S. Diu</div>
+
+    <script>
+        // Loading Screen
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loading-screen').classList.add('hidden');
+            }, 2000);
+        });
+
+        // Movies array (stored in localStorage)
+        let movies = JSON.parse(localStorage.getItem('movies')) || [];
+        let editingIndex = null;
+
+        // Render movies grid
+        function renderMovies() {
+            const grid = document.getElementById('movies-grid');
+            grid.innerHTML = '';
+            movies.forEach((movie, index) => {
+                const card = document.createElement('div');
+                card.className = 'movie-card';
+                card.innerHTML = `
+                    <video class="movie-thumbnail" src="${movie.url}" muted loop></video>
+                    <div class="movie-info">
+                        <div class="movie-title">${movie.name}</div>
+                    </div>
+                    <button class="action-btn edit-btn" onclick="openEditModal(${index}); event.stopPropagation();">Edit</button>
+                    <button class="action-btn delete-btn" onclick="deleteMovie(${index}); event.stopPropagation();">Delete</button>
+                `;
+                card.onclick = (e) => {
+                    if (e.target.tagName !== 'BUTTON') {
+                        playMovie(movie.url);
+                    }
+                };
+                grid.appendChild(card);
+            });
+
+            // Auto-play thumbnails on hover
+            grid.querySelectorAll('.movie-thumbnail').forEach(video => {
+                video.addEventListener('mouseenter', () => video.play());
+                video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+            });
+        }
+
+        // Play movie in modal
+        function playMovie(url) {
+            const modal = document.getElementById('player-modal');
+            const player = document.getElementById('player');
+            player.src = url;
+            modal.style.display = 'flex';
+            player.play();
+        }
+
+        // Close modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            if (modalId === 'player-modal') {
+                document.getElementById('player').pause();
+            }
+        }
+
+        // Upload button
+        document.getElementById('upload-btn').onclick = () => {
+            document.getElementById('upload-modal').style.display = 'flex';
+        };
+
+        // Upload movies
+        function uploadMovies() {
+            const files = document.getElementById('file-input').files;
+            if (files.length === 0) return alert('Select files!');
+
+            Array.from(files).forEach(file => {
+                const url = URL.createObjectURL(file);
+                movies.push({ name: file.name.replace(/\.[^/.]+$/, ''), url });
+            });
+
+            localStorage.setItem('movies', JSON.stringify(movies));
+            renderMovies();
+            closeModal('upload-modal');
+            alert(`${files.length} movies uploaded!`);
+        }
+
+        // Open edit modal
+        function openEditModal(index) {
+            editingIndex = index;
+            document.getElementById('edit-title').value = movies[index].name;
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+
+        // Save new title
+        function saveTitle() {
+            const newTitle = document.getElementById('edit-title').value.trim();
+            if (!newTitle) return alert('Title cannot be empty!');
+            movies[editingIndex].name = newTitle;
+            localStorage.setItem('movies', JSON.stringify(movies));
+            renderMovies();
+            closeModal('edit-modal');
+        }
+
+        // DELETE MOVIE
+        function deleteMovie(index) {
+            if (confirm(`Delete "${movies[index].name}" permanently?`)) {
+                URL.revokeObjectURL(movies[index].url);
+                movies.splice(index, 1);
+                localStorage.setItem('movies', JSON.stringify(movies));
+                renderMovies();
+            }
+        }
+
+        // Initial render
+        renderMovies();
+
+        // Close modals on outside click
+        window.onclick = (e) => {
+            const modals = ['upload-modal', 'player-modal', 'edit-modal'];
+            modals.forEach(id => {
+                if (e.target.id === id) closeModal(id);
+            });
+        };
+    </script>
+</body>
+</html>
