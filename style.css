@@ -10,6 +10,7 @@ body, html {
     overflow: hidden;
     background-color: #70c5ce;
     font-family: 'Arial Black', sans-serif;
+    touch-action: none;
 }
 
 #game-container {
@@ -19,6 +20,7 @@ body, html {
     display: flex;
     justify-content: center;
     align-items: center;
+    cursor: pointer;
 }
 
 canvas {
@@ -27,14 +29,13 @@ canvas {
     height: 100%;
 }
 
-/* This fixes the clumping on the left */
 .overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.3); /* Slight dimming */
+    background: rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -42,12 +43,22 @@ canvas {
     color: white;
     text-align: center;
     z-index: 10;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 h1 {
     font-size: 3rem;
-    margin-bottom: 20px;
+    margin-bottom: 5px;
     text-shadow: 4px 4px #000;
+}
+
+.credits {
+    font-size: 1rem;
+    color: #f1c40f; /* Gold color for your name */
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 
 p {
@@ -56,7 +67,6 @@ p {
     margin: 10px 0;
 }
 
-/* This fixes the score bar positioning */
 #ui {
     position: absolute;
     top: 40px;
@@ -67,4 +77,14 @@ p {
     text-shadow: 3px 3px #000;
     pointer-events: none;
     z-index: 5;
+}
+
+.flash {
+    animation: flash 1.5s infinite;
+}
+
+@keyframes flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
 }
